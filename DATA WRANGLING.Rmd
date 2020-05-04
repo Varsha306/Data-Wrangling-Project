@@ -70,7 +70,9 @@ netflix %>%
 ```{r}
 #Ratings dataset
 ratings <- read_csv("/Users/varsharajasekar/Downloads/ml-latest-small/ratings.csv")
+ratings=na.omit(ratings)
 ratings
+
 ```
 
 ```{r}
@@ -121,17 +123,32 @@ movielens %>%
             n_movies = n_distinct(movieId))
 ```
 
+### DATA EXPLORATION
+
 ```{r}
 genres <- movies %>%
   separate_rows(genres, sep = "\\|") %>%
   group_by(genres) %>%
   summarise(number = n()) %>%
   arrange(desc(number))
-genres
+kable(head(genres,10)) %>% 
+  kable_styling(bootstrap_options = "bordered", full_width = F , position ="center") 
 ```
 
+```{r}
+top_genre <- movielens %>% separate_rows(genres, sep = "\\|") %>%
+  group_by(genres) %>%
+  summarize(count = n()) %>%
+  arrange(desc(count))
 
-### DATA EXPLORATION
+kable(top_genre) %>% 
+  kable_styling(bootstrap_options = "bordered", full_width = F , position ="center") 
+```
+
+```{r}
+wordcloud(words=top_genre$genres,freq=top_genre$count,min.freq=50,max.words = 20,random.order=FALSE,random.color=FALSE, rot.per=0.35,colors = brewer.pal(8,"Dark2"),scale=c(5,.2),font=1)
+```
+
 a)
 
 ```{r}
@@ -194,20 +211,10 @@ avg_rating
 
 d)
 
-```{r}
-top_genre <- movielens %>% separate_rows(genres, sep = "\\|") %>%
-  group_by(genres) %>%
-  summarize(count = n()) %>%
-  arrange(desc(count))
 
-datatable(top_genre, rownames = FALSE, filter="top", options = list(pageLength = 5, scrollX=T) ) %>%
-  formatRound('count',digits=0, interval = 3, mark = ",")
-```
 
 e)
-```{r}
-wordcloud(words=top_genre$genres,freq=top_genre$count,min.freq=50,max.words = 20,random.order=FALSE,random.color=FALSE, rot.per=0.35,colors = brewer.pal(8,"Dark2"),scale=c(5,.2),font=1)
-```
+
 
 
 f)
