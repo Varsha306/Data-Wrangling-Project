@@ -44,7 +44,7 @@ node=url %>%
 node=as.data.frame(node)
 
 
-netflix=node %>% 
+netflix= node %>% 
   rename(
     Subscriber_count_18=X..of.Subscribers..2018.,
     Avg_Monthly_Revenue_18=Average.Monthly.Revenue.per.Paying.Membership,
