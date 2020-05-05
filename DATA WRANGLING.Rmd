@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ```{r}
+library(tidyr)
 library(tidyverse)
 library(readr)
 library(dplyr)
@@ -19,7 +20,6 @@ library(ggplot2)
 library(rvest)
 library(kableExtra)
 library(caret)
-library(data.table)
 library(DT)
 library(wordcloud)
 library(wordcloud2)
@@ -34,9 +34,10 @@ library(shiny)
 
 ```
 
+## WEB SCRAPING
 
 ```{r}
-##WEB SCRAPING
+
 url = read_html("https://www.comparitech.com/tv-streaming/netflix-subscribers/")
 node=url %>% 
   html_nodes(xpath='//*[@id="tablepress-475-no-2"]') %>% 
@@ -65,13 +66,13 @@ netflix %>%
 ```
 
 
-### DATA CLEANING
+## DATA CLEANING
 
 ```{r}
 #Ratings dataset
 ratings <- read_csv("/Users/varsharajasekar/Downloads/ml-latest-small/ratings.csv")
-ratings=na.omit(ratings)
-ratings
+
+glimpse(ratings)
 
 ```
 
@@ -86,26 +87,33 @@ summary(ratings)
 
 ```{r}
 #Movies dataset
-movies <- read_csv("/Users/varsharajasekar/Downloads/ml-latest-small/movies.csv")
+movies1 <- read_csv("/Users/varsharajasekar/Downloads/ml-latest-small/movies.csv")
+glimpse(movies1)
+movies1
+
+```
+
+```{r}
+movies <- movies1 %>%
+  tidyr::extract(title, c("titles", "year"), regex = "^(.*) \\(([0-9 \\-]*)\\)$", remove = F) %>%
+  mutate(year = as.integer(year)) %>% 
+           select(-title) 
+
 movies
 ```
+
 
 ```{r}
 #Tags dataset
 tags <- read_csv("/Users/varsharajasekar/Downloads/ml-latest-small/tags.csv")
-tags
-```
+glimpse(tags)
 
-```{r}
 tags <- tags %>%
   mutate(timestamp = as_datetime(timestamp))
 
 tags
 summary(tags)
 ```
-
-
-
 
 
 ```{r}
@@ -123,36 +131,75 @@ movielens %>%
             n_movies = n_distinct(movieId))
 ```
 
-### DATA EXPLORATION
+## DATA EXPLORATION
 
+# Part A : GENRES
 ```{r}
-genres <- movies %>%
+#Count for each genre by movies
+top_genre_movies <- movies %>%
   separate_rows(genres, sep = "\\|") %>%
   group_by(genres) %>%
-  summarise(number = n()) %>%
-  arrange(desc(number))
-kable(head(genres,10)) %>% 
+  summarise(movies_count = n()) %>%
+  arrange(desc(movies_count))
+
+kable(head(top_genre_movies,10)) %>% 
   kable_styling(bootstrap_options = "bordered", full_width = F , position ="center") 
 ```
 
 ```{r}
-top_genre <- movielens %>% separate_rows(genres, sep = "\\|") %>%
+#Count for each genre by ratings
+top_genre_ratings <- movielens %>% 
+  separate_rows(genres, sep = "\\|") %>%
   group_by(genres) %>%
-  summarize(count = n()) %>%
-  arrange(desc(count))
+  summarize(ratings_count = n()) %>%
+  arrange(desc(ratings_count))
 
-kable(top_genre) %>% 
+kable(head(top_genre_ratings,10)) %>% 
   kable_styling(bootstrap_options = "bordered", full_width = F , position ="center") 
 ```
 
 ```{r}
-wordcloud(words=top_genre$genres,freq=top_genre$count,min.freq=50,max.words = 20,random.order=FALSE,random.color=FALSE, rot.per=0.35,colors = brewer.pal(8,"Dark2"),scale=c(5,.2),font=1)
+head(top_genre_ratings,10) %>% 
+  ggplot(aes(x=reorder(genres, ratings_count), y=ratings_count)) +
+  geom_bar(stat='identity', fill="seagreen") + coord_flip(y=c(9000, 42000)) +
+  labs(x="genres", y="Number of ratings") +
+  geom_text(aes(label= ratings_count), hjust=-0.1, size=3) +
+  labs(title="Top 10 genres with most ratings")
 ```
 
-a)
+```{r}
+top_genre_year <- movies %>%
+  select(movieId, year, genres) %>% 
+  separate_rows(genres, sep = "\\|") %>%
+  group_by(year, genres) %>% 
+  summarise(count=n())
+
+kable(head(top_genre_year,10)) %>% 
+  kable_styling(bootstrap_options = "bordered", full_width = F , position ="center")
+
+```
+
 
 ```{r}
-# Tags for genres
+get_genre <- function(titlex){
+  movies %>% 
+    select(titles,genres) %>% 
+    group_by(genres,titles) %>% 
+    filter(titles==titlex)
+}
+get_genre('Jumanji')
+```
+
+
+
+```{r}
+#for popular genres by ratings
+wordcloud(top_genre_ratings$genres,top_genre_ratings$ratings_count,min.freq=50,max.words = 20,random.order=FALSE,random.color=FALSE, rot.per=0.35,colors = brewer.pal(8,"Dark2"),scale=c(4,.2),font=1)
+```
+
+
+```{r}
+# Groupings tags for each genres
 genres_tags <- movies %>%
   na.omit() %>%
   select(movieId, genres) %>%
@@ -164,122 +211,90 @@ genres_tags <- movies %>%
 ```
 
 ```{r}
+#Wordcloud for a genre
 genre <-"Comedy"
-genre_words <- genres_tags %>%
+top_genre_tags <- genres_tags %>%
   filter(genres == genre) %>%
   unnest() %>%
   mutate(tag = str_to_lower(tag, "en")) %>%
   anti_join(tibble(tag=c(tolower(genre)))) %>%
   count(tag)
 
-  wordcloud(genre_words$tag, genre_words$n, max.words = 50, colors=brewer.pal(8, "Dark2"))
+wordcloud(top_genre_tags$tag, top_genre_tags$n, max.words = 50, colors=brewer.pal(8, "Dark2"))
 ```
 
-b)
+# PART B : TITLE
+
 
 ```{r}
-group <-  ifelse((movielens$rating == 1 |movielens$rating == 2 | movielens$rating == 3 | 
-                  movielens$rating == 4 | movielens$rating == 5) ,
-                   "whole_star", 
-                   "half_star") 
-
-explore_ratings <- data.frame(movielens$rating, group)
-```
-
-```{r}
-ggplot(explore_ratings, aes(x= movielens.rating, fill = group)) +
-  geom_histogram( binwidth = 0.2) +
-  scale_x_continuous(breaks=seq(0, 5, by= 0.5)) +
-  scale_fill_manual(values = c("half_star"="brown", "whole_star"="seagreen")) +
-  labs(x="rating", y="number of ratings") +
-  ggtitle("histogram : number of ratings for each rating")
-```
-
-c)
-
-```{r}
-# average rating for a movie
-avg_rating <- movielens %>%
-  na.omit() %>%
-  select(movieId, title, rating) %>%
-  group_by(movieId, title) %>%
-  summarise(count = n(), mean = mean(rating), min = min(rating), max = max(rating)) %>%
-  ungroup() %>%
+#Top 20 movies with most number of ratings
+top_title <- movielens %>%
+  group_by(titles) %>%
+  summarize(count=n()) %>%
+  top_n(20,count) %>%
   arrange(desc(count))
-avg_rating
-```
 
-d)
-
-
-
-e)
-
-
-
-f)
-
-```{r}
-# the data frame top_title contains the top 20 movies which count the major number of ratings
-
-kable(head(movielens %>%
-     group_by(title,genres) %>%
-     summarize(count=n()) %>%
-     top_n(20,count) %>%
-     arrange(desc(count)) ,
-     5)) %>%
+kable(head(top_title,10)) %>%
   kable_styling(bootstrap_options = "bordered", full_width = F , position ="center") 
 ```
 
 g)
 ```{r}
-top_title <- movielens %>%
-  group_by(title) %>%
-  summarize(count=n()) %>%
-  top_n(20,count) %>%
+#Plotting the titles against the number of ratings
+head(top_title,10) %>% 
+  ggplot(aes(x=reorder(titles, count), y=count)) +
+  geom_bar(stat='identity', fill="seagreen") + coord_flip(y=c(0, 400)) +
+  labs(x="Movies", y="Number of ratings") +
+  geom_text(aes(label= count), hjust=-0.1, size=3) +
+  labs(title="Top 10 movies with most ratings")
+```
+
+
+```{r}
+##Wordcloud for top 20 titles with most ratings
+wordcloud(top_title$titles, top_title$count,min.freq=150,max.words = 20,random.order=FALSE,random.color=FALSE,rot.per=0.25,colors = brewer.pal(8,"Dark2"),scale=c(1,.6),font=1)
+
+```
+
+
+```{r}
+get_movies <- function(year1){
+  movies %>% 
+    select(titles,year) %>% 
+    group_by(year,titles) %>% 
+    filter(year==year1)
+}
+
+get_movies(1995)
+```
+
+# PART C : RATINGS
+
+```{r}
+groups <-  movielens %>% 
+  select(rating) %>% 
+  mutate(category = case_when(rating %in% c(0.5,1) ~ "Very bad",rating %in% c(1.5,2) ~ "Bad",rating %in% c(2.5,3) ~ "Average",rating %in% c(3.5,4) ~ "Good",rating %in% c(4.5,5) ~ "Very good"))
+
+ggplot(groups, aes(x= rating, fill = category)) +
+  geom_histogram( binwidth = 0.2) + 
+  scale_x_continuous(breaks=seq(0, 5, by= 0.5)) +
+  labs(x="rating", y="number of ratings") +
+  ggtitle("Count for each rating")
+```
+
+
+
+```{r}
+#Average rating for a movie
+avg_rating <- movielens %>%
+  na.omit() %>%
+  select(movieId, titles, rating) %>%
+  group_by(movieId,titles) %>%
+  summarise(count = n(), mean = mean(rating), min = min(rating), max = max(rating)) %>%
   arrange(desc(count))
 
-top_title %>% 
-  ggplot(aes(x=reorder(title, count), y=count)) +
-  geom_bar(stat='identity', fill="seagreen") + coord_flip(y=c(0, 400)) +
-  labs(x="", y="Number of ratings") +
-  geom_text(aes(label= count), hjust=-0.1, size=3) +
-  labs(title="Top 20 movies title based \n on number of ratings")
+avg_rating
 ```
-
-
-```{r}
-wordcloud(top_title$title, top_title$count,min.freq=150,max.words = 20,random.order=FALSE,random.color=FALSE,rot.per=0.25,colors = brewer.pal(8,"Dark2"),scale=c(1,.6),font=1)
-
-```
-
-h)
-
-```{r}
-# i take the original column "genre" from the edx set , whatever combination appears in this column .
-# i compute the average and standard error for each "genre". i Plot these as error bar plots for genres with more than 100000 ratings.
-
-movielens %>% group_by(genres) %>%
-  summarize(n = n(), avg = mean(rating), se = sd(rating)/sqrt(n())) %>%
-  filter(n >= 1500) %>% 
-  mutate(genres = reorder(genres, avg)) %>%
-  ggplot(aes(x = genres, y = avg, ymin = avg - 2*se, ymax = avg + 2*se)) + 
-  geom_point() +
-  geom_errorbar() + 
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-  labs(title = "error bar plots by genres" , caption = "source data : edx set") +
-  theme(
-    panel.background = element_rect(fill = "lightblue",
-                                    colour = "lightblue",
-                                    size = 0.5, linetype = "solid"),
-    panel.grid.major = element_line(size = 0.5, linetype = 'solid',
-                                    colour = "white"), 
-    panel.grid.minor = element_line(size = 0.25, linetype = 'solid',
-                                    colour = "white")
-  )
-```
-
-i)
 
 ```{r}
 # histogram of number of ratings by movieId
@@ -287,49 +302,29 @@ i)
 movielens %>% 
   count(movieId) %>% 
   ggplot(aes(n)) + 
-  geom_histogram( bins=30, color = "orange") +
+  geom_histogram( bins=30, fill = "brown",color="black") +
   scale_x_log10() + 
-  ggtitle("Movies") +
-  labs(subtitle  ="number of ratings by movieId", 
+  labs(subtitle  ="Number of ratings by movieId", 
        x="movieId" , 
-       y="number of ratings", 
-       caption ="source data : edx set") +
-  theme(panel.border = element_rect(colour="black", fill=NA))
+       y="number of ratings") 
 ```
 
-j)
 
 ```{r}
 # histogram of number of ratings by userId
-
-
 movielens %>% 
   count(userId) %>% 
   ggplot(aes(n)) + 
-  geom_histogram( bins=30, color = "green") +
-  scale_x_log10() + 
-  ggtitle("Users") +
-  labs(subtitle ="number of ratings by UserId", 
+  geom_histogram(bins=40, fill = "seagreen",color="black") +
+  labs(subtitle ="Number of ratings by UserId", 
        x="userId" , 
        y="number of ratings") +
-  theme(panel.border = element_rect(colour="black", fill=NA))
+  scale_x_log10() 
 ```
 
-k)
-
-```{r}
-#we know that the edx set contains the timestamp variable which represents the time and data in which the rating was provided. The units are seconds since January 1, 1970. with the as_datetime function in the lubridate package , we can have each timestamp in the right format . I then use the point geom to create scatterplot of y = average ratings vs x  = date ,  and smooth geom to aid the eyes in seeing patterns in the presence of overplotting.
 
 
-movielens %>% 
-  mutate(date = round_date(as_datetime(timestamp), unit = "week")) %>%
-  group_by(date) %>%
-  summarize(rating = mean(rating)) %>%
-  ggplot(aes(date, rating)) +
-  geom_point() +
-  geom_smooth() +
-  ggtitle("Timestamp, time unit : week")+
-  labs(subtitle = "average ratings")
-```
+
+
 
 
