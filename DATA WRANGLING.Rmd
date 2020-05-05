@@ -97,7 +97,7 @@ movies1
 movies <- movies1 %>%
   tidyr::extract(title, c("titles", "year"), regex = "^(.*) \\(([0-9 \\-]*)\\)$", remove = F) %>%
   mutate(year = as.integer(year)) %>% 
-           select(-title) 
+  select(-title) 
 
 movies
 ```
