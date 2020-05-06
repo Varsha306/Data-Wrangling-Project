@@ -23,15 +23,13 @@ library(caret)
 library(DT)
 library(wordcloud)
 library(wordcloud2)
-library(RColorBrewer) 
 library(ggthemes)
-library(checkpoint)
+library(RColorBrewer)
 library(stringr)
 library(XML)
 library(tidytext)
 library(doMC)
 library(shiny)
-
 ```
 
 ## WEB SCRAPING
@@ -69,14 +67,15 @@ netflix %>%
 ## DATA CLEANING
 
 ```{r}
-#Ratings dataset
-ratings <- read_csv("/Users/varsharajasekar/Downloads/ml-latest-small/ratings.csv")
+# Ratings dataset
+ratings <- read_csv("ratings.csv")
 
 glimpse(ratings)
 
 ```
 
 ```{r}
+# Converting Timestamp column
 ratings <- ratings %>%
   mutate(timestamp = as_datetime(timestamp))
 
@@ -87,13 +86,14 @@ summary(ratings)
 
 ```{r}
 #Movies dataset
-movies1 <- read_csv("/Users/varsharajasekar/Downloads/ml-latest-small/movies.csv")
+movies1 <- read_csv("movies.csv")
 glimpse(movies1)
 movies1
 
 ```
 
 ```{r}
+# Splitting title column to titles and year
 movies <- movies1 %>%
   tidyr::extract(title, c("titles", "year"), regex = "^(.*) \\(([0-9 \\-]*)\\)$", remove = F) %>%
   mutate(year = as.integer(year)) %>% 
@@ -104,10 +104,11 @@ movies
 
 
 ```{r}
-#Tags dataset
-tags <- read_csv("/Users/varsharajasekar/Downloads/ml-latest-small/tags.csv")
+# Tags dataset
+tags <- read_csv("tags.csv")
 glimpse(tags)
 
+# Converting Timestamp column
 tags <- tags %>%
   mutate(timestamp = as_datetime(timestamp))
 
@@ -161,7 +162,7 @@ kable(head(top_genre_ratings,10)) %>%
 ```{r}
 head(top_genre_ratings,10) %>% 
   ggplot(aes(x=reorder(genres, ratings_count), y=ratings_count)) +
-  geom_bar(stat='identity', fill="seagreen") + coord_flip(y=c(9000, 42000)) +
+  geom_bar(stat='identity', fill="brown") + coord_flip(y=c(9000, 42000)) +
   labs(x="genres", y="Number of ratings") +
   geom_text(aes(label= ratings_count), hjust=-0.1, size=3) +
   labs(title="Top 10 genres with most ratings")
@@ -220,7 +221,7 @@ top_genre_tags <- genres_tags %>%
   anti_join(tibble(tag=c(tolower(genre)))) %>%
   count(tag)
 
-wordcloud(top_genre_tags$tag, top_genre_tags$n, max.words = 50, colors=brewer.pal(8, "Dark2"))
+wordcloud(top_genre_tags$tag, top_genre_tags$n, max.words = 50, color=brewer.pal(8, "Dark2"))
 ```
 
 # PART B : TITLE
@@ -238,12 +239,27 @@ kable(head(top_title,10)) %>%
   kable_styling(bootstrap_options = "bordered", full_width = F , position ="center") 
 ```
 
-g)
+
+```{r}
+top_title1 <- head(top_title,5)
+
+df <- movielens %>%
+  filter(titles== top_title1$titles) %>% 
+  mutate(category = case_when(rating %in% c(0.5,1) ~ "Very bad",rating %in% c(1.5,2) ~ "Bad",rating %in% c(2.5,3) ~ "Average",rating %in% c(3.5,4) ~ "Good",rating %in% c(4.5,5) ~ "Very good")) 
+
+df$category <- factor(df$category, levels = unique(df$category))
+
+ggplot(df)+
+  geom_bar(mapping= aes(x=titles,fill=category),position="dodge",width=0.6)+
+  theme(axis.text.x = element_text(angle = 15))
+```
+
+
 ```{r}
 #Plotting the titles against the number of ratings
 head(top_title,10) %>% 
   ggplot(aes(x=reorder(titles, count), y=count)) +
-  geom_bar(stat='identity', fill="seagreen") + coord_flip(y=c(0, 400)) +
+  geom_bar(stat='identity', fill="brown") + coord_flip(y=c(0, 400)) +
   labs(x="Movies", y="Number of ratings") +
   geom_text(aes(label= count), hjust=-0.1, size=3) +
   labs(title="Top 10 movies with most ratings")
@@ -282,6 +298,16 @@ ggplot(groups, aes(x= rating, fill = category)) +
   ggtitle("Count for each rating")
 ```
 
+```{r}
+# Boxplots for top 10 genres with most number of ratings
+top_genre10=head(top_genre_ratings,10)
+
+movielens %>% 
+  filter(genres==top_genre5$genres) %>% 
+  ggplot( aes(x=genres, y=rating, fill=genres)) + 
+    geom_boxplot() +
+    theme(legend.position="none")
+```
 
 
 ```{r}
@@ -315,7 +341,7 @@ movielens %>%
 movielens %>% 
   count(userId) %>% 
   ggplot(aes(n)) + 
-  geom_histogram(bins=40, fill = "seagreen",color="black") +
+  geom_histogram(bins=40, fill="brown",color="black") +
   labs(subtitle ="Number of ratings by UserId", 
        x="userId" , 
        y="number of ratings") +
